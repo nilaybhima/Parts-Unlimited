@@ -1,0 +1,133 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "UniqueName": {
+        "type": "string"
+      },
+      "Environment": {
+        "type": "string"
+      }
+    },
+    "variables": {
+      "env": "[toLower(parameters('Environment'))]",
+      "WebsiteName": "[concat(toLower(parameters('UniqueName')), 'PartsUnlimitedWebsite', variables('env'))]",
+      "PartsUnlimitedServerName": "[concat(toLower(parameters('UniqueName')), 'sqlserver')]",
+      "PUL_HostingPlanName": "[concat(toLower(parameters('UniqueName')), 'PartsUnlimitedHostingPlan')]",
+      "PUL_DBName": "PartsUnlimitedDB",
+      "PUL_DBLogin": "AdminUser",
+      "PUL_DBPassword": "4zur3Tr41n19",
+      "PUL_DBCollation": "SQL_Latin1_General_CP1_CI_AS",
+      "PUL_DBEdition": "Basic",
+      "PUL_HostingPlanSKU": "Shared",
+      "PUL_HostingPlanWorkerSize": "0"
+    },
+    "resources": [
+      {
+        "name": "[variables('PartsUnlimitedServerName')]",
+        "type": "Microsoft.Sql/servers",
+        "location": "[resourceGroup().location]",
+        "apiVersion": "2014-04-01-preview",
+        "tags": {
+          "displayName": "PartsUnlimitedServer"
+        },
+        "properties": {
+          "administratorLogin": "[variables('PUL_DBLogin')]",
+          "administratorLoginPassword": "[variables('PUL_DBPassword')]"
+        },
+        "resources": [
+          {
+            "name": "[concat('AllowAllIps', variables('PartsUnlimitedServerName'))]",
+            "type": "firewallrules",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2014-04-01-preview",
+            "dependsOn": [
+              "[resourceId('Microsoft.Sql/servers', variables('PartsUnlimitedServerName'))]"
+            ],
+            "properties": {
+              "startIpAddress": "0.0.0.0",
+              "endIpAddress": "0.0.0.0"
+            }
+          },
+          {
+            "name": "[variables('PUL_DBName')]",
+            "type": "databases",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2014-04-01-preview",
+            "dependsOn": [
+              "[resourceId('Microsoft.Sql/servers', variables('PartsUnlimitedServerName'))]"
+            ],
+            "tags": {
+              "displayName": "PartsUnlimitedDB"
+            },
+            "properties": {
+              "collation": "[variables('PUL_DBCollation')]",
+              "edition": "[variables('PUL_DBEdition')]",
+              "maxSizeBytes": "1073741824"
+            }
+          }
+        ]
+      },
+      {
+        "name": "[variables('PUL_HostingPlanName')]",
+        "type": "Microsoft.Web/serverfarms",
+        "location": "[resourceGroup().location]",
+        "apiVersion": "2014-06-01",
+        "dependsOn": [],
+        "tags": {
+          "displayName": "PartsUnlimitedHostingPlan"
+        },
+        "properties": {
+          "name": "[variables('PUL_HostingPlanName')]",
+          "sku": "[variables('PUL_HostingPlanSKU')]",
+          "workerSize": "[variables('PUL_HostingPlanWorkerSize')]",
+          "numberOfWorkers": 1
+        }
+      },
+      {
+        "name": "[variables('WebSiteName')]",
+        "type": "Microsoft.Web/sites",
+        "dependsOn": [
+          "[resourceId('Microsoft.Web/serverfarms', variables('PUL_HostingPlanName'))]",
+          "[resourceId('Microsoft.Sql/servers', variables('PartsUnlimitedServerName'))]"
+        ],
+        "location": "[resourceGroup().location]",
+        "apiVersion": "2014-06-01",
+        "tags": {
+          "[concat('hidden-related:', resourceGroup().id, '/providers/Microsoft.Web/serverfarms/', variables('PUL_HostingPlanName'))]": "Resource",
+          "displayName": "PartsUnlimitedWebsite"
+        },
+        "properties": {
+          "name": "[variables('WebsiteName')]",
+          "serverFarm": "[variables('PUL_HostingPlanName')]"
+        },
+        "resources": [
+          {
+            "name": "connectionstrings",
+            "type": "config",
+            "apiVersion": "2014-11-01",
+            "dependsOn": [
+              "[resourceId('Microsoft.Web/sites/', variables('WebSiteName'))]"
+            ],
+            "properties": {
+              "DefaultConnectionString": {
+                "value": "[concat('Data Source=tcp:', reference(concat('Microsoft.Sql/servers/', variables('PartsUnlimitedServerName'))).fullyQualifiedDomainName, ',1433;Initial Catalog=', variables('PUL_DBName'), ';User Id=', variables ('PUL_DBLogin'), '@', variables('PartsUnlimitedServerName'), ';Password=', variables('PUL_DBPassword'), ';')]",
+                "type": "SQLAzure"
+              }
+            }
+          },
+          {
+            "name": "appsettings",
+            "type": "config",
+            "apiVersion": "2014-11-01",
+            "dependsOn": [
+              "[resourceId('Microsoft.Web/sites', variables('WebSiteName'))]"
+            ],
+            "properties": {
+            }
+          }
+        ]
+      }
+    ]
+  }
+  
